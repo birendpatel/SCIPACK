@@ -1,3 +1,10 @@
+#scipack specific ignores
+build/
+scratch/
+test/*.o
+
+#canned ignores
+
 # Prerequisites
 *.d
 
