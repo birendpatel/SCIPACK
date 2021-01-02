@@ -1,5 +1,5 @@
 /*
-* NAME: Copyright (c) 2020, Biren Patel
+* NAME: Copyright (c) 2021, Biren Patel
 * DESC: subroutines for SISD psuedo random number generation
 * LICS: MIT License
 */
