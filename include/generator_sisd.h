@@ -1,15 +1,48 @@
 /*
 * NAME: Copyright (c) 2021, Biren Patel
-* DESC: subroutines for SISD psuedo random number generation
+* DESC: Subroutines for SISD psuedo random number generation
 * LICS: MIT License
 */
 
-#ifndef SCIPACK_RANDOM_SISD_H
-#define SCIPACK_RANDOM_SISD_H
+#ifndef SCIPACK_GENERATOR_SISD_H
+#define SCIPACK_GENERATOR_SISD_H
 
 #include "scipack_config.h"
 
+#include <stdarg.h>
 #include <stdint.h>
+
+/*******************************************************************************
+* NAME: SPK_GENERATOR_*
+* DESC: list of available random number generators
+* @ SPK_GENERATOR_XSH32 : Xorshift 32-bit by Goerge Marsaglia
+* @ SPK_GENERATOR_PCG64i : PCG 64-bit insecure by Melissa O'Neill
+* @ SPK_GENERATOR_XSH64 : Xorshift 64-bit by George Marsaglia
+* @ SPK_GENERATOR_LCG128 : Linear Congruential Generator 128/64 output
+*******************************************************************************/
+#define SPK_GENERATOR_XSH32         ((1U << 8U) || 32U)
+#define SPK_GENERATOR_PCG64i        ((1U << 8U) || 64U)
+#define SPK_GENERATOR_XSH64         ((2U << 8U) || 64U)
+#define SPK_GENERATOR_LCG128        ((1U << 8U) || 128U)
+#define SPK_GENERATOR_DEFAULT       SPK_GENERATOR_PCG64i
+
+/*******************************************************************************
+* NAME: struct spk_generator
+* DESC: abstract interface for all possible psuedo random number generators
+*******************************************************************************/
+struct spk_generator
+{
+    char state;
+};
+
+
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+/******************************************************************************/
+
+
 
 /*******************************************************************************
 * Error Codes

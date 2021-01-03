@@ -1,10 +1,10 @@
 /*
-* NAME: Copyright (c) 2020, Biren Patel
-* DESC: subroutines for psuedo random number generation
+* NAME: Copyright (c) 2021, Biren Patel
+* DESC: subroutines for SISD psuedo random number generation
 * LICS: MIT License
 */
 
-#include "random_sisd.h"
+#include "generator_sisd.h"
 
 #include <assert.h>
 #include <immintrin.h>
