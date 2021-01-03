@@ -40,7 +40,7 @@ vpath %.c ../src/timing ./timing
 #------------------------------------------------------------------------------#
 
 .PHONY : random
-module_a := test_random_sisd
+module_a := test_generator_sisd
 
 .PHONY : timing
 module_b := test_timer
@@ -48,11 +48,11 @@ module_b := test_timer
 executables = $(module_a) $(module_b)
 
 #direct copy of objects_raw variable in root makefile
-objects = random_sisd.o
+objects = generator_sisd.o
 objects += timer.o
 
 #stack the test object file to the copy
-objects += test_random_sisd.o
+objects += test_generator_sisd.o
 objects += test_timer.o
 
 #------------------------------------------------------------------------------#
@@ -68,13 +68,13 @@ all : $(executables)
 random: $(module_a)
 
 #random sisd submodule
-test_random_sisd : test_random_sisd.o random_sisd.o
+test_generator_sisd : test_generator_sisd.o generator_sisd.o
 	$(CC) -o $@ $^ $(LDFLAGS) -lunity
 
-test_random_sisd.o : test_random_sisd.c random_sisd.h unity.h
+test_generator_sisd.o : test_generator_sisd.c generator_sisd.h unity.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-random_sisd.o : random_sisd.h
+generator_sisd.o : generator_sisd.h
 
 #------------------------------------------------------------------------------#
 # Module B: high resolution timing

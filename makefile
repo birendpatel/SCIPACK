@@ -31,7 +31,7 @@ vpath %.c ./src
 vpath %.c ./src/random
 vpath %.c ./src/timing
 
-objects_raw := random_sisd.o timer.o
+objects_raw := generator_sisd.o timer.o
 objects := $(addprefix $(OBJDIR), $(objects_raw))
 
 #------------------------------------------------------------------------------#
@@ -54,7 +54,7 @@ scipack : $(LIBDIR)libscipack.a
 $(LIBDIR)libscipack.a : $(objects)
 	$(AR) $(ARFLAGS) $@ $?
 
-$(OBJDIR)random_sisd.o : random_sisd.c random_sisd.h
+$(OBJDIR)generator_sisd.o : generator_sisd.c generator_sisd.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OBJDIR)timer.o : timer.c timer.h

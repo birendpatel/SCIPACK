@@ -15,9 +15,9 @@
 #define SCIPACK_PROD    2
 
 #define SCIPACK_MAJOR   0
-#define SCIPACK_MINOR   1
+#define SCIPACK_MINOR   2
 #define SCIPACK_PATCH   0
-#define SCIPACK_STAGE   SCIPACK_PROD
+#define SCIPACK_STAGE   SCIPACK_ALPHA
 
 /*******************************************************************************
 * Hardware and compiler checks
