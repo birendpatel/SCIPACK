@@ -9,7 +9,8 @@
 
 #include "scipack_config.h"
 
-#include <stdint.h>
+#include <stddef.h> //size_t
+#include <stdint.h> //uint64_t
 
 /*******************************************************************************
 * DESC: list of available random number generators
