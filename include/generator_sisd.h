@@ -4,45 +4,62 @@
 * LICS: MIT License
 */
 
-#ifndef SCIPACK_GENERATOR_SISD_H
-#define SCIPACK_GENERATOR_SISD_H
+#ifndef SPK_GENERATOR_SISD_H
+#define SPK_GENERATOR_SISD_H
 
 #include "scipack_config.h"
 
-#include <stdarg.h>
 #include <stdint.h>
 
 /*******************************************************************************
-* NAME: SPK_GENERATOR_*
 * DESC: list of available random number generators
-* @ SPK_GENERATOR_XSH32 : Xorshift 32-bit by Goerge Marsaglia
 * @ SPK_GENERATOR_PCG64i : PCG 64-bit insecure by Melissa O'Neill
 * @ SPK_GENERATOR_XSH64 : Xorshift 64-bit by George Marsaglia
 * @ SPK_GENERATOR_LCG128 : Linear Congruential Generator 128/64 output
 *******************************************************************************/
-#define SPK_GENERATOR_XSH32         ((1U << 8U) || 32U)
-#define SPK_GENERATOR_PCG64i        ((1U << 8U) || 64U)
-#define SPK_GENERATOR_XSH64         ((2U << 8U) || 64U)
-#define SPK_GENERATOR_LCG128        ((1U << 8U) || 128U)
+#define SPK_GENERATOR_PCG64i        0x140
+#define SPK_GENERATOR_XSH64         0x240
+#define SPK_GENERATOR_LCG128        0x340
 #define SPK_GENERATOR_DEFAULT       SPK_GENERATOR_PCG64i
 
 /*******************************************************************************
 * NAME: struct spk_generator
-* DESC: abstract interface for all possible psuedo random number generators
+* DESC: abstract interface between some generator and the end user
+* @ spk_next : raw generator output
+* @ spk_rand : bounded random integers in [L, H] inclusive
+* @ spk_bias : output i.i.d biased bits with probability p = N/2^M, M <= 64
+* @ spk_unid : uniform variates
 *******************************************************************************/
 struct spk_generator
 {
-    char state;
+    int (*next) (struct spk_generator *, uint64_t *, size_t);
+    int (*rand) (struct spk_generator *, uint64_t *, size_t, uint64_t L, uint64_t H);
+    int (*bias) (struct spk_generator *, uint64_t *, size_t, uint64_t N, int M);
+    int (*unid) (struct spk_generator *, double *, size_t);
+    uint64_t state[];
 };
 
+/*******************************************************************************
+* NAME: spk_GeneratorNew
+* DESC: initialize and seed some pseudo random number generator
+* OUTP: spk_generator
+* @ identifier : see list of available generators
+* @ seed : pass zero for non-deterministic seeding
+*******************************************************************************/
+struct spk_generator *spk_GeneratorNew(int identifier, uint64_t seed);
+
+/*******************************************************************************
+* NAME: spk_GeneratorDelete
+* DESC: release system resources
+* OUTP: spk_generator will point to NULL hereafter
+*******************************************************************************/
+void spk_GeneratorDelete(struct spk_generator **rng);
+
 
 /******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/
-/******************************************************************************/
-
-
 
 /*******************************************************************************
 * Error Codes

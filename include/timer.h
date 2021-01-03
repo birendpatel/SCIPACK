@@ -4,8 +4,8 @@
 * LICS: MIT License
 */
 
-#ifndef SCIPACK_TIMER_H
-#define SCIPACK_TIMER_H
+#ifndef SPK_TIMER_H
+#define SPK_TIMER_H
 
 #include "scipack_config.h"
 

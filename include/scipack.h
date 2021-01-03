@@ -4,8 +4,8 @@
 * LISC: MIT License
 */
 
-#ifndef SCIPACK_H
-#define SCIPACK_H
+#ifndef SPK_H
+#define SPK_H
 
 /*******************************************************************************
 * SCIPACK configurations: hardware checks, compiler checks, error code setup
