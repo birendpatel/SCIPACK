@@ -4,7 +4,7 @@ It includes modules for psuedo random number generation, optimization, probabili
 
 The project is in the initial development phase. 
 The current version is 0.2.9-beta. 
-Versions of the form 0.*.* imply that:
+Versions of the form 0.x.y imply that:
 * Any source code may change at any time.
 * Backwards compatibility is not guaranteed.
 * The API is not stable.
