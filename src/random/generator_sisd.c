@@ -17,15 +17,18 @@ Prototypes
 static uint64_t Hash(uint64_t *value);
 static int RdRandRetry(uint64_t *x, size_t limit);
 
-static int Pcg64iNew(struct spk_generator **rng, uint64_t seed);
-static int Xsh64New(struct spk_generator **rng, uint64_t seed);
+static int NewPCG64i(spk_generator *rng, uint64_t seed);
+static int NewXSH64(spk_generator *rng, uint64_t seed);
 
-static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n);
-static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n);
+static int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n);
+static int RandPCG64i(struct spk_generator *, uint64_t *, const size_t, const uint64_t, const uint64_t);
+static int BiasPCG64i(struct spk_generator *, uint64_t *, const size_t, const double, const int);
+static int UnidPCG64i(struct spk_generator *, double *, const size_t);
 
-static int UnbiasedRandInt(struct spk_generator *, uint64_t *, size_t, uint64_t, uint64_t);
-static int BernoulliVector(struct spk_generator *, uint64_t *, size_t, size_t, size_t);
-static int UnitDoubles(struct spk_generator *, double *, size_t);
+static int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n);
+static int RandXSH64(struct spk_generator *, uint64_t *, const size_t, const uint64_t, const uint64_t);
+static int BiasXSH64(struct spk_generator *, uint64_t *, const size_t, const double, const int);
+static int UnidXSH64(struct spk_generator *, double *, const size_t);
 
 /*******************************************************************************
 Sebastiano Vigna's version of Java SplittableRandom. This is used as a one-off 
@@ -75,46 +78,30 @@ static int RdRandRetry(uint64_t *x, size_t limit)
 }
 
 /*******************************************************************************
-Internal state of pcg 64-bit insecure, corresponding to SPK_GENERATOR_PCG64i
+Free a random number generator
 *******************************************************************************/
 
-struct pcg64i
+void spk_GeneratorDelete(spk_generator rng)
 {
-    uint64_t state;
-    uint64_t increment;
-};
-
-/*******************************************************************************
-Internal state of xorshift 64-bit, corresponding to SPK_GENERATOR_XSH64
-*******************************************************************************/
-
-struct xsh64
-{
-    uint64_t state;
-};
-
-/*******************************************************************************
-Dynamic allocation helpers
-*******************************************************************************/
-
-#define SIZEOF_INTERFACE (sizeof(struct spk_generator))
-#define SIZEOF_PCG64I (sizeof(struct pcg64i))
-#define SIZEOF_XSH64 (sizeof(struct xsh64))
+    free(rng);
+}
 
 /*******************************************************************************
 Dynamically allocate a new random number generator
 *******************************************************************************/
 
-int spk_GeneratorNew(struct spk_generator **rng, int identifier, uint64_t seed)
+#define SIZEOF_INTERFACE (sizeof(struct spk_generator))
+
+int spk_GeneratorNew(spk_generator *rng, int identifier, uint64_t seed)
 {
     switch (identifier)
     {
         case SPK_GENERATOR_PCG64i:
-            return Pcg64iNew(rng, seed);
+            return NewPCG64i(rng, seed);
             break;
             
         case SPK_GENERATOR_XSH64:
-            return Xsh64New(rng, seed);
+            return NewXSH64(rng, seed);
             break;
             
         default:
@@ -126,12 +113,20 @@ int spk_GeneratorNew(struct spk_generator **rng, int identifier, uint64_t seed)
 Initialize a pcg64i generator
 *******************************************************************************/
 
-static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
+struct pcg64i
+{
+    uint64_t state;
+    uint64_t increment;
+};
+
+#define SIZEOF_PCG64I (sizeof(struct pcg64i))
+
+static int NewPCG64i(spk_generator *rng, uint64_t seed)
 {
     *rng = malloc(SIZEOF_INTERFACE + SIZEOF_PCG64I);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
-    struct pcg64i *pcg = (struct pcg64i *) (*rng)->buffer;
+    struct pcg64i *pcg = (struct pcg64i *) (*rng)->state;
     
     if (seed != 0)
     {
@@ -153,10 +148,10 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
     pcg->increment |= 1;
     
     //hook in methods
-    (*rng)->next = Pcg64iNext;
-    (*rng)->rand = UnbiasedRandInt;
-    (*rng)->bias = BernoulliVector;
-    (*rng)->unid = UnitDoubles;
+    (*rng)->next = NextPCG64i;
+    (*rng)->rand = RandPCG64i;
+    (*rng)->bias = BiasPCG64i;
+    (*rng)->unid = UnidPCG64i;
     
     return SPK_ERROR_SUCCESS;
 }
@@ -165,12 +160,19 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
 Initialize a xsh64 generator
 *******************************************************************************/
 
-static int Xsh64New(struct spk_generator **rng, uint64_t seed)
+struct xsh64
+{
+    uint64_t state;
+};
+
+#define SIZEOF_XSH64 (sizeof(struct xsh64))
+
+static int NewXSH64(spk_generator *rng, uint64_t seed)
 {
     *rng = malloc(SIZEOF_INTERFACE + SIZEOF_XSH64);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
-    struct xsh64 *xsh = (struct xsh64 *) (*rng)->buffer;
+    struct xsh64 *xsh = (struct xsh64 *) (*rng)->state;
     
     if (seed != 0)
     {
@@ -185,22 +187,12 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed)
     }
     
     //hook in methods
-    (*rng)->next = Xsh64Next;
-    (*rng)->rand = UnbiasedRandInt;
-    (*rng)->bias = BernoulliVector;
-    (*rng)->unid = UnitDoubles;
+    (*rng)->next = NextXSH64;
+    (*rng)->rand = RandXSH64;
+    (*rng)->bias = BiasXSH64;
+    (*rng)->unid = UnidXSH64;
     
     return SPK_ERROR_SUCCESS;
-}
-
-/*******************************************************************************
-Free a random number generator, set handle to NULL
-*******************************************************************************/
-
-void spk_GeneratorDelete(struct spk_generator **rng)
-{
-    free(*rng);
-    *rng = NULL;
 }
 
 /*******************************************************************************
@@ -228,9 +220,9 @@ are made to engender simplicity.
 link time optimization alone does not result in sufficient speed gains.
 */
 
-static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n)
+static int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n)
 {
-    struct pcg64i *pcg = (struct pcg64i *) rng->buffer;    
+    struct pcg64i *pcg = (struct pcg64i *) state;    
     uint64_t permuted_state = 0;
     
     for (size_t i = 0; i < n; i++)
@@ -258,9 +250,9 @@ static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n)
 * xorshift 64-bit by George Marsaglia
 *******************************************************************************/
 
-static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n)
+static int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n)
 {
-    struct xsh64 *xsh = (struct xsh64 *) rng->buffer;
+    struct xsh64 *xsh = (struct xsh64 *) state;
     
     for (size_t i = 0; i < n; i++)
     {
@@ -281,24 +273,54 @@ rejection sampling. It includes a variable lower bound.
 TODO: attempt to use remaining upper bits after rejection.
 */
 
-static int UnbiasedRandInt
+static int RandPCG64i
 (
     struct spk_generator *rng,
     uint64_t *dest,
-    size_t n,
-    uint64_t min,
-    uint64_t max
+    const size_t n,
+    const uint64_t min,
+    const uint64_t max
 )
 {
     uint64_t outp = 0;
     uint64_t ceil = max - min;
     uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
+    uint64_t *rng_state = rng->state;
     
     for (size_t i = 0; i < n; i++)
     {
         do
         {
-            rng->next(rng, &outp, 1);
+            NextPCG64i(rng_state, &outp, 1);
+            outp = outp & mask;
+        }
+        while (outp > ceil);
+        
+        dest[i] = outp + min;
+    }
+    
+    return SPK_ERROR_SUCCESS;;
+}
+
+static int RandXSH64
+(
+    struct spk_generator *rng,
+    uint64_t *dest,
+    const size_t n,
+    const uint64_t min,
+    const uint64_t max
+)
+{
+    uint64_t outp = 0;
+    uint64_t ceil = max - min;
+    uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
+    uint64_t *rng_state = rng->state;
+    
+    for (size_t i = 0; i < n; i++)
+    {
+        do
+        {
+            NextXSH64(rng_state, &outp, 1);
             outp = outp & mask;
         }
         while (outp > ceil);
@@ -354,30 +376,81 @@ the first two trials are both successful, or the final trial is successful.
 TODO: additional error checking on n/2^m bounds
 */
 
-static int BernoulliVector
+static int BiasPCG64i
 (
-    struct spk_generator *rng,
+    spk_generator rng,
     uint64_t *dest,
-    size_t len,
-    size_t numerator,
-    size_t exponent
+    const size_t n,
+    const double p,
+    const int exp
 )
 {
-    if (numerator == 0) return SPK_ERROR_ARGBOUNDS;
-    if (exponent > 64) return SPK_ERROR_ARGBOUNDS;
+    if (p <= 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
+    if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
     
-    const size_t offset = (size_t) __builtin_ctzll(numerator);
-    const size_t total = exponent - offset;
+    uint64_t bitcode = (uint64_t) ldexp(p, exp);
+    if (bitcode == 0) bitcode += 1;
+    
+    const size_t offset = (size_t) __builtin_ctzll(bitcode);
+    const size_t total = (size_t) exp - offset;
     uint64_t buffer[total];
     uint64_t accumulator = 0;
     
-    for (size_t i = 0; i < len; i++)
+    uint64_t *rng_state = rng->state;
+    
+    for (size_t i = 0; i < n; i++)
     {
-        rng->next(rng, buffer, total);
+        NextPCG64i(rng_state, buffer, total);
         
         for (size_t j = 0; j < total; j++)
         {            
-            switch (numerator & (1ULL << (j + offset)))
+            switch (bitcode & (1ULL << (j + offset)))
+            {
+                case 0:
+                    accumulator &= buffer[j];
+                    break;
+                    
+                case 1:
+                    accumulator |= buffer[j];
+                    break;
+            }
+        }
+        
+        dest[i] = accumulator;
+    }
+    
+    return SPK_ERROR_SUCCESS;
+}
+
+static int BiasXSH64
+(
+    spk_generator rng,
+    uint64_t *dest,
+    const size_t n,
+    const double p,
+    const int exp
+)
+{
+    if (p <= 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
+    if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
+    
+    uint64_t bitcode = (uint64_t) ldexp(p, exp);
+    if (bitcode == 0) bitcode += 1;
+    
+    const size_t offset = (size_t) __builtin_ctzll(bitcode);
+    const size_t total = (size_t) exp - offset;
+    uint64_t buffer[total];
+    uint64_t accumulator = 0;
+    
+    uint64_t *rng_state = rng->state;
+    
+    for (size_t i = 0; i < n; i++)
+    {
+        NextXSH64(rng_state, buffer, total);
+        
+        for (size_t j = 0; j < total; j++)
+        {            
+            switch (bitcode & (1ULL << (j + offset)))
             {
                 case 0:
                     accumulator &= buffer[j];
@@ -399,13 +472,33 @@ static int BernoulliVector
 Convert raw generator output to doubles in the unit interval
 *******************************************************************************/
 
-static int UnitDoubles(struct spk_generator *rng, double *dest, size_t n)
+static int UnidPCG64i(struct spk_generator *rng, double *dest, const size_t n)
 {
+    uint64_t *rng_state = rng->state;
     uint64_t *buffer = malloc(sizeof(uint64_t) * n);
     
     if (!buffer) return SPK_ERROR_STDMALLOC;
     
-    rng->next(rng, buffer, n);
+    NextPCG64i(rng_state, buffer, n);
+    
+    for (size_t i = 0; i < n; i++)
+    {
+        dest[i] = ldexp((double) buffer[i], -64);
+    }
+    
+    free(buffer);
+    
+    return SPK_ERROR_SUCCESS;
+}
+
+static int UnidXSH64(struct spk_generator *rng, double *dest, const size_t n)
+{
+    uint64_t *rng_state = rng->state;
+    uint64_t *buffer = malloc(sizeof(uint64_t) * n);
+    
+    if (!buffer) return SPK_ERROR_STDMALLOC;
+    
+    NextPCG64i(rng_state, buffer, n);
     
     for (size_t i = 0; i < n; i++)
     {
