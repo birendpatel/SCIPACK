@@ -365,7 +365,7 @@ static int BernoulliVector
     if (numerator == 0) return SPK_ERROR_ARGBOUNDS;
     if (exponent > 64) return SPK_ERROR_ARGBOUNDS;
     
-    const size_t offset = __builtin_ctzll(numerator);
+    const size_t offset = (size_t) __builtin_ctzll(numerator);
     const size_t total = exponent - offset;
     uint64_t buffer[total];
     uint64_t accumulator = 0;
