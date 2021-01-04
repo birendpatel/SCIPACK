@@ -175,7 +175,7 @@ do                                                                             \
     timer_result min_tr = TimerElapsedTime(min);                               \
     timer_result max_tr = TimerElapsedTime(max);                               \
                                                                                \
-    printf("\n" testname ", %d iterations:\n", instr_limit);                   \
+    printf("\n%s, %d iterations:\n", testname, instr_limit);                   \
     printf("    min:  %-6.2f %s\n", min_tr.elapsed, min_tr.symbol);            \
     printf("    med:  %-6.2f %s\n", med_tr.elapsed, med_tr.symbol);            \
     printf("    max:  %-6.2f %s\n", max_tr.elapsed, max_tr.symbol);            \
@@ -201,14 +201,15 @@ void benchmark_generator_sisd_pcg64_insecure_next(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "pcg64 insecure malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("PCG 64-bit insecure next, 1000 iter", rng->next(rng, buffer, 1000), MEDIUM_SIM, 1);
+    char *testname = "PCG 64-bit insecure next, fill 10,000 element buffer";
+    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
     
     spk_GeneratorDelete(&rng);
 }
@@ -228,14 +229,15 @@ void benchmark_generator_sisd_xorshift64_next(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "xsh64 malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("Xorshift 64-bit next, 1000 iter", rng->next(rng, buffer, 1000), MEDIUM_SIM, 1);
+    char *testname = "Xorshift 64-bit next, fill 10,000 element buffer";
+    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
     
     spk_GeneratorDelete(&rng);
 }
@@ -255,14 +257,15 @@ void benchmark_generator_sisd_pcg64_insecure_bias(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "pcg64 insecure malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("PCG 64-bit insecure bias, 1000 iter", rng->bias(rng, buffer, 1000, 1, 8), MEDIUM_SIM, 1);
+    char *testname = "PCG 64-bit insecure bias, fill 10,000 element buffer";
+    ANALYZE(testname, rng->bias(rng, buffer, 10000, 1, 8), MEDIUM_SIM, 1);
     
     spk_GeneratorDelete(&rng);
 }
