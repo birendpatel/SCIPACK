@@ -23,8 +23,8 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed);
 static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n);
 static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n);
 
-static int RandInt(struct spk_generator *, uint64_t *, size_t, uint64_t, uint64_t);
-static int VecBias(struct spk_generator *, uint64_t *, size_t, uint64_t, int);
+static int UnbiasedRandInt(struct spk_generator *, uint64_t *, size_t, uint64_t, uint64_t);
+static int BernoulliVector(struct spk_generator *, uint64_t *, size_t, size_t, size_t);
 
 /*******************************************************************************
 Sebastiano Vigna's version of Java SplittableRandom. This is used as a one-off 
@@ -153,8 +153,8 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
     
     //hook in methods
     (*rng)->next = Pcg64iNext;
-    (*rng)->rand = RandInt;
-    (*rng)->bias = VecBias;
+    (*rng)->rand = UnbiasedRandInt;
+    (*rng)->bias = BernoulliVector;
     (*rng)->unid = NULL;
     
     return SPK_ERROR_SUCCESS;
@@ -185,8 +185,8 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed)
     
     //hook in methods
     (*rng)->next = Xsh64Next;
-    (*rng)->rand = RandInt;
-    (*rng)->bias = VecBias;
+    (*rng)->rand = UnbiasedRandInt;
+    (*rng)->bias = BernoulliVector;
     (*rng)->unid = NULL;
     
     return SPK_ERROR_SUCCESS;
@@ -280,7 +280,7 @@ rejection sampling. It includes a variable lower bound.
 TODO: attempt to use remaining upper bits after rejection.
 */
 
-static int RandInt
+static int UnbiasedRandInt
 (
     struct spk_generator *rng,
     uint64_t *dest,
@@ -349,31 +349,34 @@ view than running an arithmetic decoder, it is almost certainly faster.
 In probablity, nodes map to some event given a sequence of bernoulli trials.
 i.e,. .875 is the event of at least one success. 0.625 is the event where either
 the first two trials are both successful, or the final trial is successful.
+
+TODO: additional error checking on n/2^m bounds
 */
 
-static int VecBias
+static int BernoulliVector
 (
     struct spk_generator *rng,
     uint64_t *dest,
     size_t len,
-    uint64_t n,
-    int m
+    size_t numerator,
+    size_t exponent
 )
 {
-    const int offset = __builtin_ctzll(n); //bit index of first instruction
-    const int total = m - offset; //total instructions to be read
-    uint64_t buffer[total]; //raw prng values consumed during inner loop
-    uint64_t accumulator = 0; //target register
+    if (numerator == 0) return SPK_ERROR_ARGBOUNDS;
+    if (exponent > 64) return SPK_ERROR_ARGBOUNDS;
+    
+    const size_t offset = __builtin_ctzll(numerator);
+    const size_t total = exponent - offset;
+    uint64_t buffer[total];
+    uint64_t accumulator = 0;
     
     for (size_t i = 0; i < len; i++)
     {
-        for (int j = 0; j < total; j++)
-        {
-            //fill buffer with raw prng values
-            rng->next(rng, buffer, total);
-            
-            //modify target register according to next instruction
-            switch (n & (1 << (j + offset)))
+        rng->next(rng, buffer, total);
+        
+        for (size_t j = 0; j < total; j++)
+        {            
+            switch (numerator & (1ULL << (j + offset)))
             {
                 case 0:
                     accumulator &= buffer[j];
@@ -381,36 +384,6 @@ static int VecBias
                     
                 case 1:
                     accumulator |= buffer[j];
-                    break;
-            }
-        }
-        
-        dest[i] = accumulator;
-    }
-    
-    return SPK_ERROR_SUCCESS;
-    
-    
-////////////////////////////////////////////////////////////////////////////////
-    
-    
-    uint64_t accumulator = 0;
-    uint64_t output = 0;
-    
-    for (size_t i = 0; i < len; i++)
-    {
-        for (int pc = __builtin_ctzll(n); pc < m; pc++)
-        {
-            rng->next(rng, &output, 1);
-            
-            switch ((n >> pc) & 1)
-            {
-                case 0:
-                    accumulator &= output;
-                    break;
-
-                case 1:
-                    accumulator |= output;
                     break;
             }
         }

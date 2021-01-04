@@ -34,7 +34,7 @@ struct spk_generator
 {
     int (*next) (struct spk_generator *, uint64_t *, size_t);
     int (*rand) (struct spk_generator *, uint64_t *, size_t, uint64_t L, uint64_t H);
-    int (*bias) (struct spk_generator *, uint64_t *, size_t, uint64_t N, int M);
+    int (*bias) (struct spk_generator *, uint64_t *, size_t, size_t N, size_t M);
     int (*unid) (struct spk_generator *, double *, size_t);
     uint64_t buffer[];
 };
