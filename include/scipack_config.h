@@ -16,8 +16,8 @@
 
 #define SPK_MAJOR   0
 #define SPK_MINOR   2
-#define SPK_PATCH   8
-#define SPK_STAGE   SPK_ALPHA
+#define SPK_PATCH   9
+#define SPK_STAGE   SPK_BETA
 
 /*******************************************************************************
 * Hardware and compiler checks
