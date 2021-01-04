@@ -6,7 +6,6 @@
 
 #include "generator_sisd.h"
 
-#include <assert.h>
 #include <immintrin.h>
 #include <stdlib.h>
 
@@ -393,3 +392,8 @@ static int BernoulliVector
     
     return SPK_ERROR_SUCCESS;
 }
+
+/*******************************************************************************
+Convert raw generator output to doubles in the unit interval
+*******************************************************************************/
+
