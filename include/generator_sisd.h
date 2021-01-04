@@ -28,7 +28,7 @@
 * @ spk_next : raw generator output
 * @ spk_rand : bounded random integers in [L, H] inclusive
 * @ spk_bias : iid biased bits with probability p = N/2^M, M <= 64, 0 < n < 2^m
-* @ spk_unid : uniform variates (not yet available)
+* @ spk_unid : uniform variates of type double along the unit interval
 *******************************************************************************/
 struct spk_generator
 {

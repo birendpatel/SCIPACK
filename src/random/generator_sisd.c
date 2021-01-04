@@ -6,8 +6,9 @@
 
 #include "generator_sisd.h"
 
-#include <immintrin.h>
-#include <stdlib.h>
+#include <immintrin.h> //rdrand
+#include <stdlib.h> //malloc, free, size_t
+#include <math.h> //ldexp
 
 /*******************************************************************************
 Prototypes
@@ -24,6 +25,7 @@ static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n);
 
 static int UnbiasedRandInt(struct spk_generator *, uint64_t *, size_t, uint64_t, uint64_t);
 static int BernoulliVector(struct spk_generator *, uint64_t *, size_t, size_t, size_t);
+static int UnitDoubles(struct spk_generator *, double *, size_t);
 
 /*******************************************************************************
 Sebastiano Vigna's version of Java SplittableRandom. This is used as a one-off 
@@ -154,7 +156,7 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
     (*rng)->next = Pcg64iNext;
     (*rng)->rand = UnbiasedRandInt;
     (*rng)->bias = BernoulliVector;
-    (*rng)->unid = NULL;
+    (*rng)->unid = UnitDoubles;
     
     return SPK_ERROR_SUCCESS;
 }
@@ -186,7 +188,7 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed)
     (*rng)->next = Xsh64Next;
     (*rng)->rand = UnbiasedRandInt;
     (*rng)->bias = BernoulliVector;
-    (*rng)->unid = NULL;
+    (*rng)->unid = UnitDoubles;
     
     return SPK_ERROR_SUCCESS;
 }
@@ -397,3 +399,20 @@ static int BernoulliVector
 Convert raw generator output to doubles in the unit interval
 *******************************************************************************/
 
+static int UnitDoubles(struct spk_generator *rng, double *dest, size_t n)
+{
+    uint64_t *buffer = malloc(sizeof(uint64_t) * n);
+    
+    if (!buffer) return SPK_ERROR_STDMALLOC;
+    
+    rng->next(rng, buffer, n);
+    
+    for (size_t i = 0; i < n; i++)
+    {
+        dest[i] = ldexp((double) buffer[i], -64);
+    }
+    
+    free(buffer);
+    
+    return SPK_ERROR_SUCCESS;
+}
