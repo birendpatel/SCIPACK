@@ -130,24 +130,26 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
     *rng = malloc(SIZEOF_INTERFACE + SIZEOF_PCG64I);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
+    struct pcg64i *pcg = (struct pcg64i *) (*rng)->buffer;
+    
     if (seed != 0)
     {
-       (*rng)->buffer[0] = Hash(&seed);
-       (*rng)->buffer[1] = Hash(&seed);
+       pcg->state = Hash(&seed);
+       pcg->increment = Hash(&seed);
     }
     else
     {
         int error = SPK_ERROR_UNDEFINED;
         
-        error = RdRandRetry((*rng)->buffer, 10);
+        error = RdRandRetry(&pcg->state, 10);
         if (error) return error;
         
-        error = RdRandRetry((*rng)->buffer + 1, 10);
+        error = RdRandRetry(&pcg->increment, 10);
         if (error) return error;
     }
     
     //PCG increment must be odd
-    (*rng)->buffer[1] |= 1;
+    pcg->increment |= 1;
     
     //hook in methods
     (*rng)->next = Pcg64iNext;
@@ -167,15 +169,17 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed)
     *rng = malloc(SIZEOF_INTERFACE + SIZEOF_XSH64);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
+    struct xsh64 *xsh = (struct xsh64 *) (*rng)->buffer;
+    
     if (seed != 0)
     {
-       (*rng)->buffer[0] = Hash(&seed);
+       xsh->state = Hash(&seed);
     }
     else
     {
         int error = SPK_ERROR_UNDEFINED;
         
-        error = RdRandRetry((*rng)->buffer, 10);
+        error = RdRandRetry(&xsh->state, 10);
         if (error) return error;
     }
     
@@ -225,17 +229,24 @@ link time optimization alone does not result in sufficient speed gains.
 
 static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n)
 {
-    uint64_t x = 0, fx = 0;
+    struct pcg64i *pcg = (struct pcg64i *) rng->buffer;    
+    uint64_t permuted_state = 0;
     
     for (size_t i = 0; i < n; i++)
     {
-        x = rng->buffer[0];
+        //permute the current state
+        permuted_state = pcg->state >> 59ULL;
+        permuted_state += 5ULL;
+        permuted_state = pcg->state >> permuted_state;
+        permuted_state ^= pcg->state;
+        permuted_state *= 0xAEF17502108EF2D9ULL;
+        permuted_state ^= (permuted_state >> 43ULL);
         
-        rng->buffer[0] = rng->buffer[0] * 0x5851F42D4C957F2DULL + rng->buffer[1];
+        //update internal state
+        pcg->state = pcg->state * 0x5851F42D4C957F2DULL + pcg->increment;
         
-        fx = ((x >> ((x >> 59ULL) + 5ULL)) ^ x) * 0xAEF17502108EF2D9ULL;
-        
-        dest[i] = (fx >> 43ULL) ^ fx;
+        //track output
+        dest[i] = permuted_state;
     }
     
     return SPK_ERROR_SUCCESS;
@@ -248,23 +259,25 @@ static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n)
 
 static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n)
 {
+    struct xsh64 *xsh = (struct xsh64 *) rng->buffer;
+    
     for (size_t i = 0; i < n; i++)
     {
-        rng->buffer[0] ^= rng->buffer[0] << 13;
-        rng->buffer[0] ^= rng->buffer[0] >> 7;
-        rng->buffer[0] ^= rng->buffer[0] << 17;
+        xsh->state ^= xsh->state << 13;
+        xsh->state ^= xsh->state >> 7;
+        xsh->state ^= xsh->state << 17;
         
-        dest[i] = rng->buffer[0];
+        dest[i] = xsh->state;
     }
     
     return SPK_ERROR_SUCCESS;
 }
 
 /*******************************************************************************
-Bitmask rejection sampling lifted from the Apple 2008 arc4random C source with
-minor modifications. A variable lower bound is introduced and there is an
-immediate rejection of the full 64-bit output after the first failure, rather
-than attempting to use the upper remaining bits.
+random integers, aka discrete uniform variates. This is an unbiased variant via
+rejection sampling. It includes a variable lower bound.
+
+TODO: attempt to use remaining upper bits after rejection.
 */
 
 static int RandInt
@@ -329,9 +342,9 @@ root node. Or, alternatively, the bit trie expansion of the numerator n gives
 the very same bitcode.
 
 So given a generator that outputs unbiased bits, we can psuedo-vectorized the
-production of biased bits with at most log2(n) calls to the generator for some
-resolution n. Although this is more wasteful from an information theoretic view
-than running an arithmetic decoder, it is almost certainly faster.
+production of biased bits with at most log2(m) calls to the generator for some
+resolution 2^m. Although this is more wasteful from an information theoretic
+view than running an arithmetic decoder, it is almost certainly faster.
 
 In probablity, nodes map to some event given a sequence of bernoulli trials.
 i.e,. .875 is the event of at least one success. 0.625 is the event where either
@@ -347,6 +360,40 @@ static int VecBias
     int m
 )
 {
+    const int offset = __builtin_ctzll(n); //bit index of first instruction
+    const int total = m - offset; //total instructions to be read
+    uint64_t buffer[total]; //raw prng values consumed during inner loop
+    uint64_t accumulator = 0; //target register
+    
+    for (size_t i = 0; i < len; i++)
+    {
+        for (int j = 0; j < total; j++)
+        {
+            //fill buffer with raw prng values
+            rng->next(rng, buffer, total);
+            
+            //modify target register according to next instruction
+            switch (n & (1 << (j + offset)))
+            {
+                case 0:
+                    accumulator &= buffer[j];
+                    break;
+                    
+                case 1:
+                    accumulator |= buffer[j];
+                    break;
+            }
+        }
+        
+        dest[i] = accumulator;
+    }
+    
+    return SPK_ERROR_SUCCESS;
+    
+    
+////////////////////////////////////////////////////////////////////////////////
+    
+    
     uint64_t accumulator = 0;
     uint64_t output = 0;
     

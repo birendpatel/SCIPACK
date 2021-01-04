@@ -16,7 +16,7 @@
 
 #define SPK_MAJOR   0
 #define SPK_MINOR   2
-#define SPK_PATCH   5
+#define SPK_PATCH   6
 #define SPK_STAGE   SPK_ALPHA
 
 /*******************************************************************************

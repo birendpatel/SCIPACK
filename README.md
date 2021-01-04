@@ -1,6 +1,7 @@
 # SCIPACK
 SCIPACK is a scientific computing package targeted towards C applications on Intel/AMD hardware. 
-It includes modules for psuedo random number generation, optimization, array processing, and more.
+It includes modules for psuedo random number generation, optimization, array processing, and more. 
+It is currently in version 0.2.6-alpha.
 
 # Requirements
 To build SCIPACK on Linux you need the GNU C compiler and GNU Make. Windows users can build SCIPACK via Cygwin.
