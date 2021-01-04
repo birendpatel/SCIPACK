@@ -16,7 +16,7 @@
 
 #define SPK_MAJOR   0
 #define SPK_MINOR   2
-#define SPK_PATCH   1
+#define SPK_PATCH   2
 #define SPK_STAGE   SPK_ALPHA
 
 /*******************************************************************************
@@ -31,7 +31,7 @@
     #error "SCIPACK requires a GNU C compiler"
 #endif
 
-//submodules: random_sisd (seeding), timer (rdrand guarantees a constant TSC)
+//submodules: generator_sisd (seeding), timer (rdrand guarantees a constant TSC)
 #ifndef __RDRND__
     #error "SCIPACK requires x86 RDRAND instruction"
 #endif
@@ -50,6 +50,16 @@
 #define SPK_ERROR_STDCALLOC         2       /* stdlib calloc fail             */
 #define SPK_ERROR_STDREALLOC        3       /* stdlib realloc fail            */
 #define SPK_ERROR_RDRAND            4       /* rdrand retry loop fail         */
+#define SPK_ERROR_ARGBOUNDS         5       /* fx argument is out of bounds   */
 #define SPK_ERROR_UNDEFINED         999     /* no error has been set          */
+
+//TODO: function to fetch verbose error description
+
+/*******************************************************************************
+* Logging mechanism
+*******************************************************************************/
+
+//TODO: generic scipack callback to allow struct hooks
+//TODO: dummy callback when end user does not hook in a logger
 
 #endif

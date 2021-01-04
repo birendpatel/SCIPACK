@@ -6,68 +6,34 @@
 
 #include "generator_sisd.h"
 
-/******************************************************************************/
-/******************************************************************************/
-/******************************************************************************/
-/******************************************************************************/
-/******************************************************************************/
-
 #include <assert.h>
 #include <immintrin.h>
-#include <stdbool.h>
 #include <stdlib.h>
 
 /*******************************************************************************
-Error descriptions for enum RANDOM_SISD_ERROR_CODES
-*/
+Prototypes
+*******************************************************************************/
 
-static const char *random_error_lookup[RANDOM_SISD_UNDEFINED_ERROR] =
-{
-    [RANDOM_SISD_SUCCESS]       = "subroutine terminated successfully",
-    [RANDOM_SISD_RDRAND_FAIL]   = "x86 rdrand instruction has failed",
-    [RANDOM_SISD_MALLOC_FAIL]   = "stdlib malloc call has failed"
-};
+static uint64_t Hash(uint64_t *value);
+static int RdRandRetry(uint64_t *x, size_t limit);
 
-const char *random_sisd_error_desc(int error)
-{
-    if (error >= RANDOM_SISD_SUCCESS && error < RANDOM_SISD_UNDEFINED_ERROR)
-    {
-        return random_error_lookup[error];
-    }
-    
-    return "invalid error code";
-}
+static int Pcg64iNew(struct spk_generator **rng, uint64_t seed);
+static int Xsh64New(struct spk_generator **rng, uint64_t seed);
 
-/*******************************************************************************
-prototypes
-*/
+static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n);
+static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n);
 
-//resource management
-static void random_free_u64(u64_generator rng);
-
-//generator advancement
-static uint64_t random_next_pcg64_insecure(void *state);
-static uint64_t random_next_xorshift64(void *state);
-
-//seeding
-static uint64_t random_hash(uint64_t *value);
-static bool random_try_rdrand(uint64_t *x, size_t limit);
-
-//random sampling algorithms
-static uint64_t random_int_64(u64_generator rng, const uint64_t min, const uint64_t max);
-static uint64_t random_bernoulli_64(u64_generator rng, const uint64_t n, const int m);
-static uint64_t random_binomial_64(u64_generator rng, uint64_t k, const uint64_t n, const int m);
+static int RandInt(struct spk_generator *, uint64_t *, size_t, uint64_t, uint64_t);
+static int VecBias(struct spk_generator *, uint64_t *, size_t, uint64_t, int);
 
 /*******************************************************************************
 Sebastiano Vigna's version of Java SplittableRandom. This is used as a one-off 
 mixing function for seeding, so the state increment from Vigna's original code
-is removed in favor of an overwriting call by reference.
+is removed in favor of an overwriting call by reference. For references, see:
+http://xoshiro.di.unimi.it/splitmix64.c, http://prng.di.unimi.it/splitmix64.c.
+*******************************************************************************/
 
-http://xoshiro.di.unimi.it/splitmix64.c
-http://prng.di.unimi.it/splitmix64.c
-*/
-
-static uint64_t random_hash(uint64_t *value)
+static uint64_t Hash(uint64_t *value)
 {    
     uint64_t i = *value;
     
@@ -83,122 +49,153 @@ static uint64_t random_hash(uint64_t *value)
 }
 
 /*******************************************************************************
-the rdrand instruction is used to seed all generators when non-deterministic
+The rdrand instruction is used to seed all generators when non-deterministic
 behavior is requested. Per Intel documentation, the rdrand instruction must be 
-retried ten times on the rare chance that underflow occurs. The ULL cast is to
-silence some GCC warnings.
-*/
+retried ten times on the rare chance that underflow occurs. The limit param is
+available if AMD guidelines differ. The ULL cast is to silence some GCC warnings
+since uint64_t is an unsigned long on some machines.
 
-static bool random_try_rdrand(uint64_t *x, size_t limit)
+TODO: see concerns about rdrand here, we may want to replace it with something
+else. https://cr.yp.to/talks/2014.05.16/slides-dan+tanja-20140516-4x3.pdf
+perhaps an internal LCG which uses a high-res counter coupled with ASLR.
+*******************************************************************************/
+
+static int RdRandRetry(uint64_t *x, size_t limit)
 {    
     for (size_t i = 0; i < limit; i++)
     {
         if (_rdrand64_step((unsigned long long *) x))
         {
-            return true;
+            return SPK_ERROR_SUCCESS;
         }
     }
     
-    return false;
-}
-
-
-/*******************************************************************************
-Release resources held by generator. The state pointer is the original address
-returned by malloc, see init functions where the state is pocketed in front
-of the generator.
-*/
-
-static void random_free_u64(u64_generator rng)
-{
-    free(rng->state);
-    
-    return;
+    return SPK_ERROR_RDRAND;
 }
 
 /*******************************************************************************
-These are the actual generators hiding underneath the abstract u64_generator
-object. During initialization, we assign one generator to the state member and
-hook the corresponding next() function. This polymorphism helps to simplify the 
-API. Note that each generator needs its own seed() and next() functions.
-*/
+Internal state of pcg 64-bit insecure, corresponding to SPK_GENERATOR_PCG64i
+*******************************************************************************/
 
-#define SIZEOF_GENERATOR_64BIT (sizeof(struct u64_generator))
-
-
-struct pcg64_insecure
+struct pcg64i
 {
     uint64_t state;
     uint64_t increment;
 };
-#define SIZEOF_PCG64_INSECURE (sizeof(struct pcg64_insecure))
 
+/*******************************************************************************
+Internal state of xorshift 64-bit, corresponding to SPK_GENERATOR_XSH64
+*******************************************************************************/
 
-struct xorshift64
+struct xsh64
 {
     uint64_t state;
 };
-#define SIZEOF_XORSHIFT64 (sizeof(struct xorshift64))
 
 /*******************************************************************************
-PCG64 insecure seeding. The increment must be odd. This library is non-crypto 
-so we use the faster rdrand instruction to avoid the rdseed extractor and to 
-minimize risk of underflow. This function demonstrates the general init approach
-for all generators:
+Dynamic allocation helpers
+*******************************************************************************/
 
-1. allocate the abstract interface and pocket the generator just in front of it
-2. seed the internal state
-3. hook the callbacks, where next() is unique to each generator
-*/
+#define SIZEOF_INTERFACE (sizeof(struct spk_generator))
+#define SIZEOF_PCG64I (sizeof(struct pcg64i))
+#define SIZEOF_XSH64 (sizeof(struct xsh64))
 
-u64_generator random_sisd_init_pcg64_insecure(uint64_t seed, int *error)
+/*******************************************************************************
+Dynamically allocate a new random number generator
+*******************************************************************************/
+
+int spk_GeneratorNew(struct spk_generator **rng, int identifier, uint64_t seed)
 {
-    //allocate both interface and generator together for cache locality
-    size_t bytes = SIZEOF_PCG64_INSECURE + SIZEOF_GENERATOR_64BIT;
-    struct pcg64_insecure *pcg64i = malloc(bytes);
-    
-    if (!pcg64i)
+    switch (identifier)
     {
-        if (error) *error = RANDOM_SISD_MALLOC_FAIL;
-        return NULL;
+        case SPK_GENERATOR_PCG64i:
+            return Pcg64iNew(rng, seed)
+            break;
+            
+        case SPK_GENERATOR_XSH64:
+            return Xsh64New(rng, seed);
+            break;
+            
+        default:
+            return SPK_ERROR_ARGBOUNDS;
     }
+}
+
+/*******************************************************************************
+Initialize a pcg64i generator
+*******************************************************************************/
+
+static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
+{
+    *rng = malloc(SIZEOF_INTERFACE++ SIZEOF_PCG64I);
+    if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
-    struct u64_generator *g64b = (void*) ((char*) pcg64i + SIZEOF_PCG64_INSECURE);
-    
-    //seed the generator
     if (seed != 0)
     {
-        pcg64i->state = random_hash(&seed);
-        pcg64i->increment = random_hash(&seed);
+       (*rng)->buffer[0] = Hash(&seed);
+       (*rng)->buffer[1] = Hash(&seed);
     }
     else
     {
-        if (!random_try_rdrand(&pcg64i->state, 10))
-        {
-            if (error) *error = RANDOM_SISD_RDRAND_FAIL;
-            return NULL;
-        }
+        int error = SPK_ERROR_UNDEFINED;
         
-        if (!random_try_rdrand(&pcg64i->increment, 10))
-        {
-            if (error) *error = RANDOM_SISD_RDRAND_FAIL;
-            return NULL;
-        }
+        error = RdRandRetry((*rng)->buffer, 10)
+        if (error) return error;
+        
+        error = RdRandRetry((*rng)->buffer + 1, 10)
+        if (error) return error;
     }
     
-    pcg64i->increment |= 1;
+    //PCG increment must be odd
+    (*rng)->buffer[1] |= 1;
     
-    //hook pcg into the interface
-    g64b->state = (void*) pcg64i;
-    g64b->free = random_free_u64;
-    g64b->next = random_next_pcg64_insecure;
-    g64b->randint = random_int_64;
-    g64b->bernoulli = random_bernoulli_64;
-    g64b->binomial = random_binomial_64;
+    //hook in methods
+    (*rng)->next = Pcg64iNext;
+    (*rng)->rand = RandInt;
+    (*rng)->bias = VecBias;
+    (*rng)->unid = NULL;
     
-    //drop the pcg handle and return the interface, use state ptr to recover
-    if (error) *error = RANDOM_SISD_SUCCESS;
-    return g64b;
+    return SPK_ERROR_SUCCESS;
+}
+
+/*******************************************************************************
+Initialize a xsh64 generator
+*******************************************************************************/
+
+static int Xsh64New(struct spk_generator **rng, uint64_t seed)
+{
+    *rng = malloc(SIZEOF_INTERFACE++ SIZEOF_XSH64);
+    if (!(*rng)) return SPK_ERROR_STDMALLOC;
+    
+    if (seed != 0)
+    {
+       (*rng)->buffer[0] = Hash(&seed);
+    }
+    else
+    {
+        int error = SPK_ERROR_UNDEFINED;
+        
+        error = RdRandRetry((*rng)->buffer, 10)
+        if (error) return error;
+    }
+    
+    //hook in methods
+    (*rng)->next = Xsh64Next;
+    (*rng)->rand = RandInt;
+    (*rng)->bias = VecBias;
+    (*rng)->unid = NULL;
+    
+    return SPK_ERROR_SUCCESS;
+}
+
+/*******************************************************************************
+Free a random number generator, set handle to NULL
+*******************************************************************************/
+
+void spk_GeneratorDelete(struct spk_generator **rng)
+{
+    free(*rng);
+    *rng = NULL;
 }
 
 /*******************************************************************************
@@ -221,100 +218,80 @@ layout randomization has been replaced with x86 rdrand and/or seed hashing.
 2. The preprocssor macros from O'Neill have been replaced, decimal constants
 were swapped for hex, and variable names have been changed. These modifications
 are made to engender simplicity.
+
+3. A data buffer is filled to reduce latency due to static library usage, since
+link time optimization alone does not result in sufficient speed gains.
 */
 
-static uint64_t random_next_pcg64_insecure(void *state)
+static int Pcg64iNext(struct spk_generator *rng, uint64_t *dest, size_t n)
 {
-    struct pcg64_insecure *pcg64i = state;
+    uint64_t x = 0, fx = 0;
     
-    uint64_t x = pcg64i->state;
+    for (size_t i = 0; i < n; i++)
+    {
+        x = rng->buffer[0];
+        
+        rng->buffer[0] = rng->buffer[0] * 0x5851F42D4C957F2DULL + rng->buffer[1];
+        
+        fx = ((x >> ((x >> 59ULL) + 5ULL)) ^ x) * 0xAEF17502108EF2D9ULL;
+        
+        dest[i] = (fx >> 43ULL) ^ fx;
+    }
+    
+    return SPK_ERROR_SUCCESS;
+}
 
-    pcg64i->state = pcg64i->state * 0x5851F42D4C957F2DULL + pcg64i->increment;
 
-    uint64_t fx = ((x >> ((x >> 59ULL) + 5ULL)) ^ x) * 0xAEF17502108EF2D9ULL;
+/*******************************************************************************
+* xorshift 64-bit by George Marsaglia
+*******************************************************************************/
 
-    return (fx >> 43ULL) ^ fx;
+static int Xsh64Next(struct spk_generator *rng, uint64_t *dest, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+    {
+        rng->buffer[0] ^= rng->buffer[0] << 13;
+        rng->buffer[0] ^= rng->buffer[0] >> 7;
+        rng->buffer[0] ^= rng->buffer[0] << 17;
+        
+        dest[i] = rng->buffer[0];
+    }
+    
+    return SPK_ERROR_SUCCESS;
 }
 
 /*******************************************************************************
-xorshift64 seeding, see pcg seeding for overview.
-*/
-
-u64_generator random_sisd_init_xorshift64(uint64_t seed, int *error)
-{
-    //allocate both interface and generator together for cache locality
-    size_t bytes = SIZEOF_XORSHIFT64 + SIZEOF_GENERATOR_64BIT;
-    struct xorshift64 *xor64 = malloc(bytes);
-    
-    if (!xor64)
-    {
-        if (error) *error = RANDOM_SISD_MALLOC_FAIL;
-        return NULL;
-    }
-    
-    struct u64_generator *g64b = (void*) ((char*) xor64 + SIZEOF_XORSHIFT64);
-    
-    //seed the generator
-    if (seed != 0)
-    {
-        xor64->state = random_hash(&seed);
-    }
-    else
-    {
-        if (!random_try_rdrand(&xor64->state, 10))
-        {
-            if (error) *error = RANDOM_SISD_RDRAND_FAIL;
-            return NULL;
-        }
-    }
-    
-    //hook xor into the interface
-    g64b->state = (void*) xor64;
-    g64b->next = random_next_xorshift64;
-    g64b->free = random_free_u64;
-    g64b->randint = random_int_64;
-    g64b->bernoulli = random_bernoulli_64;
-    g64b->binomial = random_binomial_64;
-    
-    //drop the xor handle and return the interface, use state ptr to recover
-    if (error) *error = RANDOM_SISD_SUCCESS;
-    return g64b;
-}
-
-
-/******************************************************************************/
-
-static uint64_t random_next_xorshift64(void *state)
-{
-    struct xorshift64 *xor64 = state;
-    
-    xor64->state ^= xor64->state << 13;
-    xor64->state ^= xor64->state >> 7;
-    xor64->state ^= xor64->state << 17;
-
-    return xor64->state;
-}
-
-/*******************************************************************************
-Bitmask rejection sampling lifted from the Applce 2008 arc4random C source with
+Bitmask rejection sampling lifted from the Apple 2008 arc4random C source with
 minor modifications. A variable lower bound is introduced and there is an
 immediate rejection of the full 64-bit output after the first failure, rather
 than attempting to use the upper remaining bits.
 */
 
-static uint64_t random_int_64(u64_generator rng, const uint64_t min, const uint64_t max)
+static int RandInt
+(
+    struct spk_generator *rng,
+    uint64_t *dest,
+    size_t n,
+    uint64_t min,
+    uint64_t max
+)
 {
     uint64_t outp = 0;
     uint64_t ceil = max - min;
     uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
     
-    do
+    for (size_t i = 0; i < n; i++)
     {
-        outp = rng->next(rng->state) & mask;
+        do
+        {
+            rng->next(rng, &outp, 1);
+        }
+        while (outp > ceil);
+        
+        dest[i] = outp + min;
     }
-    while (outp > ceil);
     
-    return outp + min;
+    return SPK_ERROR_SUCCESS;;
 }
 
 /*******************************************************************************
@@ -360,45 +337,38 @@ i.e,. .875 is the event of at least one success. 0.625 is the event where either
 the first two trials are both successful, or the final trial is successful.
 */
 
-static uint64_t random_bernoulli_64(u64_generator rng, const uint64_t n, const int m)
+static int VecBias
+(
+    struct spk_generator *rng,
+    uint64_t *dest,
+    size_t len,
+    uint64_t n,
+    int m
+)
 {
     uint64_t accumulator = 0;
-
-    for (int pc = __builtin_ctzll(n); pc < m; pc++)
-    {
-        switch ((n >> pc) & 1)
-        {
-            case 0:
-                accumulator &= rng->next(rng->state);
-                break;
-
-            case 1:
-                accumulator |= rng->next(rng->state);
-                break;
-        }
-    }
-
-    return accumulator;
-}
-
-/*******************************************************************************
-Generate a number from a binomial distribution by simultaneous simulation of
-64 iid bernoulli trials per loop.
-*/
-
-static uint64_t random_binomial_64(u64_generator rng, uint64_t k, const uint64_t n, const int m)
-{
-    uint64_t success = 0;
-    uint64_t trials = 0;
-
-    for (; k > 64; k -= 64)
-    {
-        trials = rng->bernoulli(rng, n, m);
-        success += (uint64_t) __builtin_popcountll(trials);
-    }
-
-    trials = rng->bernoulli(rng, n, m) >> (64 - k);
-    success += (uint64_t) __builtin_popcountll(trials);
+    uint64_t output = 0;
     
-    return success;
+    for (size_t i = 0; i < len; i++)
+    {
+        for (int pc = __builtin_ctzll(n); pc < m; pc++)
+        {
+            rng->next(rng, &output, 1);
+            
+            switch ((n >> pc) & 1)
+            {
+                case 0:
+                    accumulator &= output;
+                    break;
+
+                case 1:
+                    accumulator |= output;
+                    break;
+            }
+        }
+        
+        dest[i] = accumulator;
+    }
+    
+    return SPK_ERROR_SUCCESS;
 }
