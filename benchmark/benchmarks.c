@@ -193,7 +193,7 @@ void benchmark_generator_sisd_pcg64_insecure_next(void)
     int error = 0;
     
     struct spk_generator *rng;
-    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0)
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0);
     
     if (error)
     {
@@ -220,7 +220,7 @@ void benchmark_generator_sisd_xorshift64_next(void)
     int error = 0;
     
     struct spk_generator *rng;
-    error = spk_GeneratorNew(&rng, SPK_GENERATOR_XSH64, 0)
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_XSH64, 0);
     
     if (error)
     {
@@ -247,7 +247,7 @@ void benchmark_generator_sisd_pcg64_insecure_bias(void)
     int error = 0;
     
     struct spk_generator *rng;
-    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0)
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0);
     
     if (error)
     {

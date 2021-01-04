@@ -109,7 +109,7 @@ int spk_GeneratorNew(struct spk_generator **rng, int identifier, uint64_t seed)
     switch (identifier)
     {
         case SPK_GENERATOR_PCG64i:
-            return Pcg64iNew(rng, seed)
+            return Pcg64iNew(rng, seed);
             break;
             
         case SPK_GENERATOR_XSH64:
@@ -127,7 +127,7 @@ Initialize a pcg64i generator
 
 static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
 {
-    *rng = malloc(SIZEOF_INTERFACE++ SIZEOF_PCG64I);
+    *rng = malloc(SIZEOF_INTERFACE + SIZEOF_PCG64I);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
     if (seed != 0)
@@ -139,10 +139,10 @@ static int Pcg64iNew(struct spk_generator **rng, uint64_t seed)
     {
         int error = SPK_ERROR_UNDEFINED;
         
-        error = RdRandRetry((*rng)->buffer, 10)
+        error = RdRandRetry((*rng)->buffer, 10);
         if (error) return error;
         
-        error = RdRandRetry((*rng)->buffer + 1, 10)
+        error = RdRandRetry((*rng)->buffer + 1, 10);
         if (error) return error;
     }
     
@@ -164,7 +164,7 @@ Initialize a xsh64 generator
 
 static int Xsh64New(struct spk_generator **rng, uint64_t seed)
 {
-    *rng = malloc(SIZEOF_INTERFACE++ SIZEOF_XSH64);
+    *rng = malloc(SIZEOF_INTERFACE + SIZEOF_XSH64);
     if (!(*rng)) return SPK_ERROR_STDMALLOC;
     
     if (seed != 0)
@@ -175,7 +175,7 @@ static int Xsh64New(struct spk_generator **rng, uint64_t seed)
     {
         int error = SPK_ERROR_UNDEFINED;
         
-        error = RdRandRetry((*rng)->buffer, 10)
+        error = RdRandRetry((*rng)->buffer, 10);
         if (error) return error;
     }
     
@@ -285,6 +285,7 @@ static int RandInt
         do
         {
             rng->next(rng, &outp, 1);
+            outp = outp & mask;
         }
         while (outp > ceil);
         
