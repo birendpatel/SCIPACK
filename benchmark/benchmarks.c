@@ -142,7 +142,7 @@ do                                                                             \
         exit(EXIT_FAILURE);                                                    \
     }                                                                          \
                                                                                \
-    for (size_t j = 0; j < instr_limit * 10; j++)                              \
+    for (size_t j = 0; j < instr_limit; j++)                                   \
     {                                                                          \
         (test);                                                                \
         __asm__ volatile ("");                                                 \
@@ -175,7 +175,7 @@ do                                                                             \
     timer_result min_tr = TimerElapsedTime(min);                               \
     timer_result max_tr = TimerElapsedTime(max);                               \
                                                                                \
-    printf("\n" testname ", %d iterations:\n", instr_limit);                   \
+    printf("\n%s, %d iterations:\n", testname, instr_limit);                   \
     printf("    min:  %-6.2f %s\n", min_tr.elapsed, min_tr.symbol);            \
     printf("    med:  %-6.2f %s\n", med_tr.elapsed, med_tr.symbol);            \
     printf("    max:  %-6.2f %s\n", max_tr.elapsed, max_tr.symbol);            \
@@ -188,10 +188,12 @@ while (0)                                                                      \
 
 /******************************************************************************/
 
-void benchmark_random_sisd_pcg64_insecure(void)
+void benchmark_generator_sisd_pcg64_insecure_next(void)
 {
     int error = 0;
-    u64_generator pcg = random_sisd_init_pcg64_insecure(0, &error);
+    
+    struct spk_generator *rng;
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0);
     
     if (error)
     {
@@ -199,35 +201,55 @@ void benchmark_random_sisd_pcg64_insecure(void)
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("PCG 64-bit insecure", pcg->next(pcg->state), MEDIUM_SIM, 1000);
-    
-    pcg->free(pcg);
-}
-
-/******************************************************************************/
-
-void benchmark_random_sisd_xorshift64(void)
-{
-    int error = 0;
-    u64_generator xsh = random_sisd_init_xorshift64(0, &error);
-    
-    if (error)
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    if (!buffer)
     {
-        fprintf(stderr, "xorshift insecure init failure: code %d\n", error);
+        fprintf(stderr, "pcg64 insecure malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("Xorshift 64-bit", xsh->next(xsh->state), MEDIUM_SIM, 1000);
+    char *testname = "PCG 64-bit insecure next, fill 10,000 element buffer";
+    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
     
-    xsh->free(xsh);
+    spk_GeneratorDelete(&rng);
 }
 
 /******************************************************************************/
 
-void benchmark_random_sisd_pcg64_insecure_bernoulli(void)
+void benchmark_generator_sisd_xorshift64_next(void)
 {
     int error = 0;
-    u64_generator pcg = random_sisd_init_pcg64_insecure(0, &error);
+    
+    struct spk_generator *rng;
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_XSH64, 0);
+    
+    if (error)
+    {
+        fprintf(stderr, "xsh64 init failure: code %d\n", error);
+        exit(EXIT_FAILURE);
+    }
+    
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    if (!buffer)
+    {
+        fprintf(stderr, "xsh64 malloc failure\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    char *testname = "Xorshift 64-bit next, fill 10,000 element buffer";
+    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
+    
+    spk_GeneratorDelete(&rng);
+}
+
+/******************************************************************************/
+
+void benchmark_generator_sisd_pcg64_insecure_bias(void)
+{
+    int error = 0;
+    
+    struct spk_generator *rng;
+    error = spk_GeneratorNew(&rng, SPK_GENERATOR_PCG64i, 0);
     
     if (error)
     {
@@ -235,9 +257,17 @@ void benchmark_random_sisd_pcg64_insecure_bernoulli(void)
         exit(EXIT_FAILURE);
     }
     
-    ANALYZE("PCG 64-bit insecure bernoulli", pcg->bernoulli(pcg, 1, 8), MEDIUM_SIM, 1000);
+    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    if (!buffer)
+    {
+        fprintf(stderr, "pcg64 insecure malloc failure\n");
+        exit(EXIT_FAILURE);
+    }
     
-    pcg->free(pcg);
+    char *testname = "PCG 64-bit insecure bias, fill 10,000 element buffer";
+    ANALYZE(testname, rng->bias(rng, buffer, 10000, 1, 8), MEDIUM_SIM, 1);
+    
+    spk_GeneratorDelete(&rng);
 }
 
 /******************************************************************************/
@@ -246,8 +276,8 @@ int main(void)
 {    
     BENCHMARKS_BEGIN();
         BENCHMARKS_MODULE("psuedo random number generators");
-            RUN_BENCHMARK(benchmark_random_sisd_pcg64_insecure);
-            RUN_BENCHMARK(benchmark_random_sisd_xorshift64);
-            RUN_BENCHMARK(benchmark_random_sisd_pcg64_insecure_bernoulli);
+            RUN_BENCHMARK(benchmark_generator_sisd_pcg64_insecure_next);
+            RUN_BENCHMARK(benchmark_generator_sisd_xorshift64_next);
+            RUN_BENCHMARK(benchmark_generator_sisd_pcg64_insecure_bias);
     BENCHMARKS_END();
 }
