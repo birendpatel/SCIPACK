@@ -472,7 +472,7 @@ element one at a time with an ldexp conversion.
 static int UnidPCG64i(struct spk_generator *rng, double *dest, const size_t n)
 {
     uint64_t *rng_state = rng->state;
-    uint64_t *target = dest;
+    uint64_t *target = (uint64_t *) dest;
     
     NextPCG64i(rng_state, target, n);
     
@@ -489,7 +489,7 @@ static int UnidPCG64i(struct spk_generator *rng, double *dest, const size_t n)
 static int UnidXSH64(struct spk_generator *rng, double *dest, const size_t n)
 {
     uint64_t *rng_state = rng->state;
-    uint64_t *target = dest;
+    uint64_t *target = (uint64_t *) dest;
     
     NextXSH64(rng_state, target, n);
     
