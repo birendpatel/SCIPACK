@@ -13,19 +13,17 @@
 /*******************************************************************************
 Prototypes
 *******************************************************************************/
-
 static uint64_t Hash(uint64_t *value);
 static int RdRandRetry(uint64_t *x, size_t limit);
 
 static int NewPCG64i(spk_generator *rng, uint64_t seed);
-static int NewXSH64(spk_generator *rng, uint64_t seed);
-
-static int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n);
+static inline int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n);
 static int RandPCG64i(struct spk_generator *, uint64_t *, const size_t, const uint64_t, const uint64_t);
 static int BiasPCG64i(struct spk_generator *, uint64_t *, const size_t, const double, const int);
 static int UnidPCG64i(struct spk_generator *, double *, const size_t);
 
-static int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n);
+static int NewXSH64(spk_generator *rng, uint64_t seed);
+static inline int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n);
 static int RandXSH64(struct spk_generator *, uint64_t *, const size_t, const uint64_t, const uint64_t);
 static int BiasXSH64(struct spk_generator *, uint64_t *, const size_t, const double, const int);
 static int UnidXSH64(struct spk_generator *, double *, const size_t);
@@ -36,7 +34,6 @@ mixing function for seeding, so the state increment from Vigna's original code
 is removed in favor of an overwriting call by reference. For references, see:
 http://xoshiro.di.unimi.it/splitmix64.c, http://prng.di.unimi.it/splitmix64.c.
 *******************************************************************************/
-
 static uint64_t Hash(uint64_t *value)
 {    
     uint64_t i = *value;
@@ -63,7 +60,6 @@ TODO: see concerns about rdrand here, we may want to replace it with something
 else. https://cr.yp.to/talks/2014.05.16/slides-dan+tanja-20140516-4x3.pdf
 perhaps an internal LCG which uses a high-res counter coupled with ASLR.
 *******************************************************************************/
-
 static int RdRandRetry(uint64_t *x, size_t limit)
 {    
     for (size_t i = 0; i < limit; i++)
@@ -80,7 +76,6 @@ static int RdRandRetry(uint64_t *x, size_t limit)
 /*******************************************************************************
 Free a random number generator
 *******************************************************************************/
-
 void spk_GeneratorDelete(spk_generator rng)
 {
     free(rng);
@@ -89,7 +84,6 @@ void spk_GeneratorDelete(spk_generator rng)
 /*******************************************************************************
 Dynamically allocate a new random number generator
 *******************************************************************************/
-
 #define SIZEOF_INTERFACE (sizeof(struct spk_generator))
 
 int spk_GeneratorNew(spk_generator *rng, int identifier, uint64_t seed)
@@ -112,7 +106,6 @@ int spk_GeneratorNew(spk_generator *rng, int identifier, uint64_t seed)
 /*******************************************************************************
 Initialize a pcg64i generator
 *******************************************************************************/
-
 struct pcg64i
 {
     uint64_t state;
@@ -159,7 +152,6 @@ static int NewPCG64i(spk_generator *rng, uint64_t seed)
 /*******************************************************************************
 Initialize a xsh64 generator
 *******************************************************************************/
-
 struct xsh64
 {
     uint64_t state;
@@ -218,9 +210,8 @@ are made to engender simplicity.
 
 3. A data buffer is filled to reduce latency due to static library usage, since
 link time optimization alone does not result in sufficient speed gains.
-*/
-
-static int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n)
+*******************************************************************************/
+static inline int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n)
 {
     struct pcg64i *pcg = (struct pcg64i *) state;    
     uint64_t permuted_state = 0;
@@ -245,12 +236,10 @@ static int NextPCG64i(uint64_t *state, uint64_t *dest, const size_t n)
     return SPK_ERROR_SUCCESS;
 }
 
-
 /*******************************************************************************
 * xorshift 64-bit by George Marsaglia
 *******************************************************************************/
-
-static int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n)
+static inline int NextXSH64(uint64_t *state, uint64_t *dest, const size_t n)
 {
     struct xsh64 *xsh = (struct xsh64 *) state;
     
@@ -272,7 +261,6 @@ rejection sampling. It includes a variable lower bound.
 
 TODO: attempt to use remaining upper bits after rejection.
 */
-
 static int RandPCG64i
 (
     struct spk_generator *rng,
@@ -282,25 +270,27 @@ static int RandPCG64i
     const uint64_t max
 )
 {
-    uint64_t outp = 0;
-    uint64_t ceil = max - min;
-    uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
+    uint64_t output = 0;
+    const uint64_t ceil = max - min;
+    const uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
     uint64_t *rng_state = rng->state;
     
     for (size_t i = 0; i < n; i++)
     {
         do
         {
-            NextPCG64i(rng_state, &outp, 1);
-            outp = outp & mask;
+            NextPCG64i(rng_state, &output, 1);
+            output &= mask;
         }
-        while (outp > ceil);
+        while (output > ceil);
         
-        dest[i] = outp + min;
+        dest[i] = output + min;
     }
     
     return SPK_ERROR_SUCCESS;;
 }
+
+
 
 static int RandXSH64
 (
@@ -312,8 +302,8 @@ static int RandXSH64
 )
 {
     uint64_t outp = 0;
-    uint64_t ceil = max - min;
-    uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
+    const uint64_t ceil = max - min;
+    const uint64_t mask = ~((uint64_t) 0) >> __builtin_clzll(ceil);
     uint64_t *rng_state = rng->state;
     
     for (size_t i = 0; i < n; i++)
@@ -375,7 +365,6 @@ the first two trials are both successful, or the final trial is successful.
 
 TODO: additional error checking on n/2^m bounds
 */
-
 static int BiasPCG64i
 (
     spk_generator rng,
@@ -421,6 +410,9 @@ static int BiasPCG64i
     
     return SPK_ERROR_SUCCESS;
 }
+
+
+
 
 static int BiasXSH64
 (
@@ -469,43 +461,42 @@ static int BiasXSH64
 }
 
 /*******************************************************************************
-Convert raw generator output to doubles in the unit interval
+Convert raw generator output to doubles in the unit interval. For speed, we need
+to make just one call to the generator next method. For memory, we should try
+to avoid malloc'ing an entire separate array to hold the raw generator output.
+So, this algorithm: pretend the destination is actually an array of uint64_t,
+fill it up using the generator, then run across the buffer and overwrite each
+element one at a time with an ldexp conversion.
 *******************************************************************************/
 
 static int UnidPCG64i(struct spk_generator *rng, double *dest, const size_t n)
 {
     uint64_t *rng_state = rng->state;
-    uint64_t *buffer = malloc(sizeof(uint64_t) * n);
+    uint64_t *target = dest;
     
-    if (!buffer) return SPK_ERROR_STDMALLOC;
-    
-    NextPCG64i(rng_state, buffer, n);
+    NextPCG64i(rng_state, target, n);
     
     for (size_t i = 0; i < n; i++)
     {
-        dest[i] = ldexp((double) buffer[i], -64);
+        dest[i] = ldexp((double) target[i], -64);
     }
     
-    free(buffer);
-    
-    return SPK_ERROR_SUCCESS;
+    return SPK_ERROR_SUCCESS;    
 }
+
+
 
 static int UnidXSH64(struct spk_generator *rng, double *dest, const size_t n)
 {
     uint64_t *rng_state = rng->state;
-    uint64_t *buffer = malloc(sizeof(uint64_t) * n);
+    uint64_t *target = dest;
     
-    if (!buffer) return SPK_ERROR_STDMALLOC;
-    
-    NextPCG64i(rng_state, buffer, n);
+    NextXSH64(rng_state, target, n);
     
     for (size_t i = 0; i < n; i++)
     {
-        dest[i] = ldexp((double) buffer[i], -64);
+        dest[i] = ldexp((double) target[i], -64);
     }
     
-    free(buffer);
-    
-    return SPK_ERROR_SUCCESS;
+    return SPK_ERROR_SUCCESS;   
 }
