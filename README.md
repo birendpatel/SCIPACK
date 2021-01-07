@@ -3,7 +3,7 @@ SCIPACK is a scientific computing package targeted towards C applications on Int
 It includes modules for psuedo random number generation, optimization, probability, and more.
 
 The project is in the initial development phase. 
-The current version is 0.2.11-beta. 
+The current version is 0.2.12-beta. 
 Versions of the form 0.x.y imply that:
 * Any source code may change at any time.
 * Backwards compatibility is not guaranteed.

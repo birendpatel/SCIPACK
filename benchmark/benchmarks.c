@@ -78,7 +78,7 @@ static void timer_setup(void)
     printf("Estimating TSC Frequency...");
     fflush(stdout);
     
-    unsigned long long freq = TimerGetHz();
+    unsigned long long freq = spk_TimerGetFrequency();
     
     printf("\r                            ");
     printf("\rEstimated TSC Frequency: %4.2f GHz\n", (double) freq / 1.0E9);
@@ -149,7 +149,7 @@ do                                                                             \
                                                                                \
     for (size_t i = 0; i < sim_limit; i++)                                     \
     {                                                                          \
-        TimerStart();                                                          \
+        spk_TimerStart();                                                      \
                                                                                \
         for (size_t j = 0; j < instr_limit; j++)                               \
         {                                                                      \
@@ -157,9 +157,9 @@ do                                                                             \
             __asm__ volatile ("");                                             \
         }                                                                      \
                                                                                \
-        TimerStop();                                                           \
+        spk_TimerStop();                                                       \
                                                                                \
-        data[i] = TimerElapsedCycles();                                        \
+        data[i] = spk_TimerElapsedCycles();                                    \
     }                                                                          \
                                                                                \
     error = cycles_stats(data, sim_limit, &med, &mad, &min, &max);             \
@@ -169,10 +169,10 @@ do                                                                             \
         fprintf(stderr, "cycles statistics failure\n");                        \
     }                                                                          \
                                                                                \
-    timer_result med_tr = TimerElapsedTime(med);                               \
-    timer_result mad_tr = TimerElapsedTime(mad);                               \
-    timer_result min_tr = TimerElapsedTime(min);                               \
-    timer_result max_tr = TimerElapsedTime(max);                               \
+    spk_timer_result med_tr = spk_TimerElapsedTime(med);                       \
+    spk_timer_result mad_tr = spk_TimerElapsedTime(mad);                       \
+    spk_timer_result min_tr = spk_TimerElapsedTime(min);                       \
+    spk_timer_result max_tr = spk_TimerElapsedTime(max);                       \
                                                                                \
     printf("\n%s, %d iterations:\n", testname, instr_limit);                   \
     printf("    min:  %-6.2f %s\n", min_tr.elapsed, min_tr.symbol);            \
