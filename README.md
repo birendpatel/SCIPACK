@@ -3,7 +3,7 @@ SCIPACK is a scientific computing package targeted towards C applications on Int
 It includes modules for psuedo random number generation, optimization, probability, and more.
 
 The project is in the initial development phase. 
-The current version is 0.2.9-beta. 
+The current version is 0.2.11-beta. 
 Versions of the form 0.x.y imply that:
 * Any source code may change at any time.
 * Backwards compatibility is not guaranteed.
@@ -62,7 +62,7 @@ Integration tests for the random and probability modules may take a few minutes 
 To microbenchmark the core SCIPACK functions, execute `make benchmarks` in the root directory. Then run `./build/benchmarks`.
  
 These microbenchmarks are performed using the SCIPACK timer submodule, which uses the time stamp counter (TSC) as its underlying wall clock. 
-For portability, the benchmarks program estimates the TSC frequency on startup. 
+For portability between Linux and Windows, the benchmarks program estimates the TSC frequency on startup. 
 Typically, the estimate is within 10 megahertz of the true value.
 
 If you know the true TSC frequency of your processor, you can override the internal sampling algorithm. 
