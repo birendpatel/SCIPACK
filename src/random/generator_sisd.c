@@ -367,6 +367,10 @@ the first two trials are both successful, or the final trial is successful.
 Implementation details
 - a probability below 1/2^m collapses to zero, hence the ctzll protection
 - VLA holds total raw output words needed on each inner loop
+
+TODO
+- optimize to jump table over each byte
+- further optimize with mmap just-in-time compilation
 */
 static int BiasPCG64i
 (
@@ -380,8 +384,6 @@ static int BiasPCG64i
     if (p < 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
     if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
     
-    uint64_t *rng_state = rng->state;
-    
     //registers
     uint64_t RAX = 0;
     int PC = 0;
@@ -392,13 +394,11 @@ static int BiasPCG64i
     const int limit = exp - __builtin_ctzll(path|1);
     
     //program data - populated by generator next method
+    uint64_t *rng_state = rng->state;
     uint64_t data[limit];
     
     for (size_t i = 0; i < n; i++)
     {
-        RAX = 0;
-        PC = 0;
-        
         NextPCG64i(rng_state, data, (size_t) limit);
         
         while (PC < limit)
@@ -406,18 +406,18 @@ static int BiasPCG64i
             switch ((bitcode >> PC) & 0x1)
             {
                 case 0:
-                    RAX &= data[PC];
+                    RAX &= data[PC++];
                     break;
                     
                 case 1:
-                    RAX |= data[PC];
+                    RAX |= data[PC++];
                     break;
             }
-            
-            PC++;
         }
         
         dest[i] = RAX;
+        RAX = 0;
+        PC = 0;
     }
     
     return SPK_ERROR_SUCCESS;
@@ -437,8 +437,6 @@ static int BiasXSH64
     if (p < 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
     if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
     
-    uint64_t *rng_state = rng->state;
-    
     //registers
     uint64_t RAX = 0;
     int PC = 0;
@@ -449,13 +447,11 @@ static int BiasXSH64
     const int limit = exp - __builtin_ctzll(path|1);
     
     //program data - populated by generator next method
+    uint64_t *rng_state = rng->state;
     uint64_t data[limit];
     
     for (size_t i = 0; i < n; i++)
     {
-        RAX = 0;
-        PC = 0;
-        
         NextXSH64(rng_state, data, (size_t) limit);
         
         while (PC < limit)
@@ -463,18 +459,18 @@ static int BiasXSH64
             switch ((bitcode >> PC) & 0x1)
             {
                 case 0:
-                    RAX &= data[PC];
+                    RAX &= data[PC++];
                     break;
                     
                 case 1:
-                    RAX |= data[PC];
+                    RAX |= data[PC++];
                     break;
             }
-            
-            PC++;
         }
         
         dest[i] = RAX;
+        RAX = 0;
+        PC = 0;
     }
     
     return SPK_ERROR_SUCCESS;
