@@ -1,5 +1,5 @@
 /*
-* NAME: Copyright (C) 2020, Biren Patel
+* NAME: Copyright (C) 2021, Biren Patel
 * DESC: high precision benchmarking for core subroutines
 * LICS: MIT License
 */
@@ -90,7 +90,7 @@ Unity-style benchmarking API.
 
 #define BENCHMARKS_BEGIN()                                                     \
         system("clear");                                                       \
-        puts("SCIPACK Benchmarks - Copyright (C) 2020, Biren Patel\n");        \
+        puts("SCIPACK Benchmarks - Copyright (C) 2021, Biren Patel\n");        \
         printf("Compile Date: %s\n", __DATE__);                                \
         printf("Compile Time: %s\n", __TIME__);                                \
         timer_setup()
@@ -115,7 +115,6 @@ Preset simulation size options
 #define MEDIUM_SIM  1000
 #define LARGE_SIM   10000
 #define MASSIVE_SIM 100000
-
 
 /*******************************************************************************
 Microbenchmarking core function. Execute "test" across "sim_limit" total
@@ -201,17 +200,17 @@ void benchmark_generator_sisd_pcg64_insecure_next(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "pcg64 insecure malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    char *testname = "PCG 64-bit insecure next, fill 10,000 element buffer";
-    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
+    char *testname = "PCG 64-bit insecure next, fill 1000 element buffer";
+    ANALYZE(testname, rng->next(rng->state, buffer, 1000), MASSIVE_SIM, 1);
     
-    spk_GeneratorDelete(&rng);
+    spk_GeneratorDelete(rng);
 }
 
 /******************************************************************************/
@@ -229,17 +228,17 @@ void benchmark_generator_sisd_xorshift64_next(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "xsh64 malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    char *testname = "Xorshift 64-bit next, fill 10,000 element buffer";
-    ANALYZE(testname, rng->next(rng, buffer, 10000), MEDIUM_SIM, 1);
+    char *testname = "Xorshift 64-bit next, fill 1000 element buffer";
+    ANALYZE(testname, rng->next(rng->state, buffer, 1000), MASSIVE_SIM, 1);
     
-    spk_GeneratorDelete(&rng);
+    spk_GeneratorDelete(rng);
 }
 
 /******************************************************************************/
@@ -257,17 +256,17 @@ void benchmark_generator_sisd_pcg64_insecure_bias(void)
         exit(EXIT_FAILURE);
     }
     
-    uint64_t *buffer = malloc(10000 * sizeof(uint64_t));
+    uint64_t *buffer = malloc(1000 * sizeof(uint64_t));
     if (!buffer)
     {
         fprintf(stderr, "pcg64 insecure malloc failure\n");
         exit(EXIT_FAILURE);
     }
     
-    char *testname = "PCG 64-bit insecure bias, fill 10,000 element buffer";
-    ANALYZE(testname, rng->bias(rng, buffer, 10000, 1, 8), MEDIUM_SIM, 1);
+    char *testname = "PCG 64-bit insecure bias, fill 1000 element buffer";
+    ANALYZE(testname, rng->bias(rng, buffer, 1000, .003, 8), MASSIVE_SIM, 1);
     
-    spk_GeneratorDelete(&rng);
+    spk_GeneratorDelete(rng);
 }
 
 /******************************************************************************/
