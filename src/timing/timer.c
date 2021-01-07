@@ -1,5 +1,5 @@
 /*
-* NAME: Copyright (C) 2020, Biren Patel
+* NAME: Copyright (C) 2021, Biren Patel
 * DESC: Precision timer internals for elapsed-time microbenchmarking via TSC
 * LICS: MIT License
 */
@@ -12,15 +12,15 @@
 #include <time.h> //nanosleep
 
 /*******************************************************************************
-Reference units for struct timer_result to aid user in text formatting.
+Reference units for struct spk_timer_result to aid user in text formatting.
 */
 
-static const char * symbol_lookup[TIMER_NANOSECONDS + 1] =
+static const char * symbol_lookup[SPK_TIMER_NANOSECONDS + 1] =
 {
-    [TIMER_SECONDS]         = "sec",
-    [TIMER_MILLISECONDS]    = "ms",
-    [TIMER_MICROSECONDS]    = "us",
-    [TIMER_NANOSECONDS]     = "ns"
+    [SPK_TIMER_SECONDS]         = "sec",
+    [SPK_TIMER_MILLISECONDS]    = "ms",
+    [SPK_TIMER_MICROSECONDS]    = "us",
+    [SPK_TIMER_NANOSECONDS]     = "ns"
 };
 
 /*******************************************************************************
@@ -65,13 +65,13 @@ static void TimerSetHz(void)
     
     for (size_t i = 0; i < MAX_NANOSLEEP_ITER; i++)
     {
-        TimerStart();
+        spk_TimerStart();
         nanosleep(&ts, NULL);
-        TimerStop();
+        spk_TimerStop();
         
-        assert(TimerElapsedCycles() > 0 && "rdtsc delta is negative");
+        assert(spk_TimerElapsedCycles() > 0 && "rdtsc delta is negative");
         
-        overhead_data[i] = TimerElapsedCycles();
+        overhead_data[i] = spk_TimerElapsedCycles();
     }
     
     qsort(overhead_data, MAX_NANOSLEEP_ITER, sizeof(unsigned long long), cmp);
@@ -85,13 +85,13 @@ static void TimerSetHz(void)
     
     for (size_t i = 0; i < MAX_TICKS_ITER; i++)
     {
-        TimerStart();
+        spk_TimerStart();
         nanosleep(&ts, NULL);
-        TimerStop();
+        spk_TimerStop();
         
-        assert(TimerElapsedCycles() > 0 && "rdtsc delta is negative");
+        assert(spk_TimerElapsedCycles() > 0 && "rdtsc delta is negative");
         
-        ticks_data[i] = TimerElapsedCycles() - overhead;
+        ticks_data[i] = spk_TimerElapsedCycles() - overhead;
     }
     
     qsort(ticks_data, MAX_TICKS_ITER, sizeof(unsigned long long), cmp);
@@ -107,7 +107,7 @@ static void TimerSetHz(void)
 API access to estimated TSC frequency
 */
 
-unsigned long long TimerGetHz(void)
+unsigned long long spk_TimerGetFrequency(void)
 {
     TimerSetHz();
     
@@ -116,21 +116,21 @@ unsigned long long TimerGetHz(void)
 
 /******************************************************************************/
 
-timer_result TimerElapsedTime(unsigned long long cycles)
+spk_timer_result spk_TimerElapsedTime(unsigned long long cycles)
 {
-    timer_result tr;
+    spk_timer_result tr;
     
     TimerSetHz();
     
     tr.elapsed = (double) cycles / (double) tsc_hz;
-    tr.resolution = TIMER_SECONDS;
+    tr.resolution = SPK_TIMER_SECONDS;
     
     while (tr.elapsed < 1.0)
     {
         tr.elapsed *= 1000.0;
         tr.resolution += 1;
         
-        assert(tr.resolution <= TIMER_NANOSECONDS && "timer formatting");
+        assert(tr.resolution <= SPK_TIMER_NANOSECONDS && "timer formatting");
     }
     
     strcpy(tr.symbol, symbol_lookup[tr.resolution]);
