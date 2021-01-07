@@ -6,6 +6,7 @@
 
 #include "generator_sisd.h"
 
+#include <assert.h>
 #include <immintrin.h> //rdrand
 #include <stdlib.h> //malloc, free, size_t
 #include <math.h> //ldexp
@@ -322,7 +323,7 @@ static int RandXSH64
 }
 
 /*******************************************************************************
-This function uses a virtual machine to simultaneously generate 64 iid bernoulli
+Use a virtual accumulator machine to simultaneously generate 64 iid bernoulli
 trials without the SIMD instruction set. I wrote a short essay at the following
 url: https://stackoverflow.com/questions/35795110/ (username Ollie) which uses
 256 bit resolution to demonstrate the main concepts.
@@ -363,7 +364,9 @@ In probablity, nodes map to some event given a sequence of bernoulli trials.
 i.e,. .875 is the event of at least one success. 0.625 is the event where either
 the first two trials are both successful, or the final trial is successful.
 
-TODO: additional error checking on n/2^m bounds
+Implementation details
+- a probability below 1/2^m collapses to zero, hence the ctzll protection
+- VLA holds total raw output words needed on each inner loop
 */
 static int BiasPCG64i
 (
@@ -374,43 +377,51 @@ static int BiasPCG64i
     const int exp
 )
 {
-    if (p <= 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
+    if (p < 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
     if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
-    
-    uint64_t bitcode = (uint64_t) ldexp(p, exp);
-    if (bitcode == 0) bitcode += 1;
-    
-    const size_t offset = (size_t) __builtin_ctzll(bitcode);
-    const size_t total = (size_t) exp - offset;
-    uint64_t buffer[total];
-    uint64_t accumulator = 0;
     
     uint64_t *rng_state = rng->state;
     
+    //registers
+    uint64_t RAX = 0;
+    int PC = 0;
+    
+    //program instructions - shift out dummy ORI instructions at head
+    const uint64_t path = (uint64_t) ldexp(p, exp);
+    const uint64_t bitcode = path >> __builtin_ctzll(path|1);
+    const int limit = exp - __builtin_ctzll(path|1);
+    
+    //program data - populated by generator next method
+    uint64_t data[limit];
+    
     for (size_t i = 0; i < n; i++)
     {
-        NextPCG64i(rng_state, buffer, total);
+        RAX = 0;
+        PC = 0;
         
-        for (size_t j = 0; j < total; j++)
-        {            
-            switch (bitcode & (1ULL << (j + offset)))
+        NextPCG64i(rng_state, data, (size_t) limit);
+        
+        while (PC < limit)
+        {
+            switch ((bitcode >> PC) & 0x1)
             {
                 case 0:
-                    accumulator &= buffer[j];
+                    RAX &= data[PC];
                     break;
                     
                 case 1:
-                    accumulator |= buffer[j];
+                    RAX |= data[PC];
                     break;
             }
+            
+            PC++;
         }
         
-        dest[i] = accumulator;
+        dest[i] = RAX;
     }
     
     return SPK_ERROR_SUCCESS;
 }
-
 
 
 
@@ -423,38 +434,47 @@ static int BiasXSH64
     const int exp
 )
 {
-    if (p <= 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
+    if (p < 0.0 || p >= 1.0) return SPK_ERROR_ARGBOUNDS;
     if (exp <= 0 || exp >= 65) return SPK_ERROR_ARGBOUNDS;
-    
-    uint64_t bitcode = (uint64_t) ldexp(p, exp);
-    if (bitcode == 0) bitcode += 1;
-    
-    const size_t offset = (size_t) __builtin_ctzll(bitcode);
-    const size_t total = (size_t) exp - offset;
-    uint64_t buffer[total];
-    uint64_t accumulator = 0;
     
     uint64_t *rng_state = rng->state;
     
+    //registers
+    uint64_t RAX = 0;
+    int PC = 0;
+    
+    //program instructions - shift out dummy ORI instructions at head
+    const uint64_t path = (uint64_t) ldexp(p, exp);
+    const uint64_t bitcode = path >> __builtin_ctzll(path|1);
+    const int limit = exp - __builtin_ctzll(path|1);
+    
+    //program data - populated by generator next method
+    uint64_t data[limit];
+    
     for (size_t i = 0; i < n; i++)
     {
-        NextXSH64(rng_state, buffer, total);
+        RAX = 0;
+        PC = 0;
         
-        for (size_t j = 0; j < total; j++)
-        {            
-            switch (bitcode & (1ULL << (j + offset)))
+        NextXSH64(rng_state, data, (size_t) limit);
+        
+        while (PC < limit)
+        {
+            switch ((bitcode >> PC) & 0x1)
             {
                 case 0:
-                    accumulator &= buffer[j];
+                    RAX &= data[PC];
                     break;
                     
                 case 1:
-                    accumulator |= buffer[j];
+                    RAX |= data[PC];
                     break;
             }
+            
+            PC++;
         }
         
-        dest[i] = accumulator;
+        dest[i] = RAX;
     }
     
     return SPK_ERROR_SUCCESS;
