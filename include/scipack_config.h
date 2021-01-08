@@ -15,9 +15,9 @@
 #define SPK_PROD    2
 
 #define SPK_MAJOR   0
-#define SPK_MINOR   2
-#define SPK_PATCH   12
-#define SPK_STAGE   SPK_BETA
+#define SPK_MINOR   3
+#define SPK_PATCH   1
+#define SPK_STAGE   SPK_ALPHA
 
 /*******************************************************************************
 * Hardware and compiler checks
@@ -51,6 +51,8 @@
 #define SPK_ERROR_STDREALLOC        3       /* stdlib realloc fail            */
 #define SPK_ERROR_RDRAND            4       /* rdrand retry loop fail         */
 #define SPK_ERROR_ARGBOUNDS         5       /* fx argument is out of bounds   */
+#define SPK_ERROR_OVERFLOW          6       /* overflow of adjusted argument  */
+#define SPK_ERROR_NULLINPUT         7       /* fx argument is null            */
 #define SPK_ERROR_UNDEFINED         999     /* no error has been set          */
 
 //TODO: function to fetch verbose error description
